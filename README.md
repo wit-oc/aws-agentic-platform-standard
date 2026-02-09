@@ -78,3 +78,10 @@ flowchart TB
 ## Notes on AgentCore / Strands
 
 This repo is capability-first. If AgentCore/Strands features are available and mature in your AWS environment, map them in as accelerators. If not, the documented AWS-native baseline remains fully viable.
+
+## Additions in this revision
+- Agent-to-agent authentication pattern (IAM/IRSA + SigV4 signed envelopes)
+- Explicit observability vs immutable auditing split
+- Terraform-first module/workspace delivery model
+- Lambda-first to ROSA-scale runtime migration path
+- Layered prompt/security inheritance model (`base-policy-pack` -> `domain-pack` -> `agent-intent-pack`)

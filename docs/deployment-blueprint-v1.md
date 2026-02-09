@@ -11,10 +11,11 @@
 - [ ] Enable KMS, Secrets Manager, CloudTrail organization trail
 
 ## 2) Runtime and Orchestration
-- [ ] Deploy Agent Runtime (ECS/EKS/Lambda)
+- [ ] Deploy Agent Runtime (Lambda baseline, ROSA/EKS for scale)
 - [ ] Deploy Step Functions workflow scaffold
 - [ ] Add EventBridge bus + SQS queues for async tasks
 - [ ] Implement idempotency keys + retry budgets
+- [ ] Standardize inter-agent signed envelope (`agent_id`,`tenant_id`,`trace_id`,`policy_context`,`ttl`)
 
 ## 3) Model and Memory
 - [ ] Bedrock model routing config (cost/latency/risk aware)
@@ -33,12 +34,15 @@
 - [ ] Configure network boundaries + VPC endpoints
 - [ ] Enable model/content guardrails
 - [ ] Set audit trail to immutable retention where required
+- [ ] Enforce A2A auth via IAM/IRSA + SigV4/private endpoints (no static shared keys)
+- [ ] Enable replay protection/nonces on inter-agent commands
 
 ## 6) Observability and Evals
 - [ ] Emit standardized telemetry (`trace_id`, `tenant_id`, `agent_id`)
 - [ ] Create SLO dashboard (availability, latency, tool success)
 - [ ] Define eval datasets + pass/fail thresholds
 - [ ] Configure rollback triggers on quality/safety regression
+- [ ] Build separate immutable audit evidence stream correlated by `trace_id/run_id`
 
 ## 7) CI/CD Promotion
 - [ ] Build immutable runtime artifact + signed manifest
