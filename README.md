@@ -7,6 +7,8 @@ Practical, implementation-focused reference for building an enterprise-grade, mu
 - `docs/aws-agentic-platform-architecture.md` — full architecture standard
 - `docs/one-page-architecture.md` — bootstrap quickstart with 1-page Mermaid diagram
 - `docs/deployment-blueprint-v1.md` — executable rollout checklist
+- `docs/autonomy-levels-overview.md` — public-facing autonomy model one-pager
+- `docs/autonomy-action-taxonomy-risk-classes-v1.md` — detailed action taxonomy, risk classes, and lane mapping
 
 ## 1-Page Architecture Diagram (Mermaid)
 
