@@ -6,9 +6,10 @@
 ## Why this exists
 This document explains how we scale agent autonomy **without** losing human accountability.
 
-Our approach combines two controls:
+Our approach combines three controls:
 - **Risk class** (`R0`–`R4`) to classify action impact.
 - **Execution lane** (`auto`, `queued`, `manual`) to enforce the right level of oversight.
+- **Action-surface control tier** to account for where the agent actually runs: platform-owned runtime, Workato/iPaaS/proprietary platform, SaaS-native agent surface, or legacy exception.
 
 ## Autonomy model at a glance
 
@@ -56,15 +57,18 @@ Our approach combines two controls:
 
 - **Policy-first execution:** every action classified before execution.
 - **Deterministic approvals:** clear approver identity, decision trail, and timestamps.
-- **Auditability:** immutable run/decision trace.
+- **Auditability:** immutable run/decision trace, or documented native audit/compensating control where full gateway fronting is not technically available.
 - **Fail-safe default:** when context is missing, route to stricter lane.
-- **Least privilege:** agent/tool access scoped to required minimum.
+- **Least privilege:** agent/tool/app access scoped to required minimum.
+- **Delegated authorization clarity:** do not represent service-account execution as user entitlement.
+- **Governance spine over product preference:** Workato or another iPaaS can be an enforcement point, but the autonomy model must not assume one vendor gateway can govern every agent surface.
 
 ## What this enables
 
 - Faster execution on low-risk work.
 - Predictable human checkpoints for consequential work.
 - Clear governance posture for teams adopting agentic systems.
+- A practical way to govern agents across AWS/AgentCore, Workato or other iPaaS platforms, proprietary automation, and SaaS-native surfaces such as Workday or Zoom.
 
 ---
 

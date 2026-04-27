@@ -44,8 +44,80 @@ Amazon Bedrock **SHOULD** be the primary model access path for the prototype.
 
 Other model providers **MAY** be added in later revisions where justified, but multi-provider support **MUST NOT** weaken the initial governance, identity, and runtime contracts.
 
-## 2. Reserved for Forthcoming Tool and Data-Plane Section
-This revision leaves Section 2 open so the numbering of the identity decisions remains aligned with the review thread. The next draft should use this section for tool/data-plane exposure, gateway boundaries, and resource access flow.
+## 2. Tool, Data-Plane, and External Agent Platform Governance
+
+### 2.A. Enterprise Agent Inventory
+All enterprise agent surfaces **MUST** be inventoried in a central registry or registry-backed control plane, regardless of runtime location.
+
+The inventory **MUST** include, where applicable:
+- agent or automation name
+- owning team
+- runtime or host platform
+- environment
+- data domains accessed
+- tool or action surface
+- identity mode
+- delegated-user support status
+- approval and audit capabilities
+- gateway or policy-enforcement integration tier
+
+This includes agents and agent-like automations running in AWS-hosted application code, Bedrock AgentCore Runtime, Workato or other iPaaS platforms, proprietary automation platforms such as Pega, and SaaS-native agent surfaces such as Workday or Zoom.
+
+### 2.B. Logical Governance Spine, Not Single Product Gateway
+The platform **MUST** preserve a single logical governance spine for policy, identity context, audit correlation, and approval routing.
+
+That governance spine **MUST NOT** be equated with a single vendor gateway product. Workato, a proprietary iPaaS, an AWS-hosted tool gateway, or a SaaS-native admin/control surface **MAY** each serve as an enforcement point for the resources they can actually mediate, but no single integration platform **SHOULD** be assumed to front every agent, tool, or SaaS action.
+
+Workato or a similar iPaaS **MAY** be used as a managed integration plane where it provides strong connector coverage, operational ownership, and policy/audit hooks. It **MUST NOT** become the default enterprise-wide agent gateway unless it can preserve delegated identity, least privilege, replay/idempotency controls, approval hooks, and immutable audit correlation across the relevant action surface.
+
+### 2.C. Gateway Fronting Expectations
+For platform-owned agents and integration platforms where requests can be mediated, nontrivial external actions **SHOULD** route through Gateway-managed tool contracts or an equivalent policy-enforced execution boundary.
+
+For SaaS-native agents or constrained vendor surfaces where full gateway fronting is not feasible, the platform **MUST** still apply compensating controls:
+- inventory the agent surface and owner
+- restrict OAuth scopes, app permissions, and admin entitlements
+- collect native audit/admin events where available
+- classify exposed actions by risk
+- document unsupported delegation or approval capabilities
+- define exception handling, disablement, and review cadence
+
+Limited fronting **MUST NOT** be treated as invisibility. SaaS-native agents remain governed assets even when the platform can only observe, configure, or constrain them indirectly.
+
+### 2.D. Tool and Resource Contract Registration
+Every governed tool or external action surface **SHOULD** have a registered contract containing:
+- action name and description
+- target system and resource type
+- read/write/destructive classification
+- risk class
+- required identity mode
+- required request context fields
+- approval requirements
+- audit event requirements
+- rollback or compensation notes where applicable
+
+Tool registration **MUST** distinguish between capability availability and execution authority. A tool being registered for an agent does not mean every user or invocation is authorized to execute it.
+
+### 2.E. Integration Control Tiers
+The prototype **SHOULD** classify each external platform or tool surface into one of these control tiers:
+
+| Tier | Pattern | Expected control posture |
+|---|---|---|
+| Tier 0 | Platform-owned agent/runtime/tool gateway | Full request context, policy evaluation, approval, audit, replay protection |
+| Tier 1 | Mediated iPaaS or proprietary automation platform | Registered contracts, policy hooks where available, audit correlation, scoped credentials |
+| Tier 2 | SaaS-native agent or constrained vendor surface | Inventory, native admin controls, least-privilege app scopes, audit ingestion, documented gaps |
+| Tier 3 | Legacy/manual exception | Explicit risk acceptance, compensating controls, owner review, migration target |
+
+Promotion from prototype to production **MUST** identify the tier for every in-scope action surface and document any Tier 2 or Tier 3 gaps.
+
+### 2.F. Delegated Authorization Preservation Across Platforms
+Where a request originates from a human user and touches protected data or governed business functions, the integration path **MUST** preserve delegated user authorization when the downstream system supports it.
+
+If an external platform only supports service-account execution, the use case **MUST** be explicitly marked as service-authorized, policy-bounded, and audit-enhanced. Service-account execution **MUST NOT** be used to imply user entitlement where the downstream system did not actually enforce it.
+
+### 2.G. Portability and Vendor Neutrality for Integration Control
+The control model **SHOULD** avoid making any one integration vendor the irreversible center of the architecture.
+
+The preferred pattern is a portable policy, identity, request-context, and audit contract that can be implemented by multiple enforcement points: an AWS-hosted gateway, Workato or another iPaaS, proprietary platforms, and SaaS-native controls. This preserves governance consistency without forcing every workflow through one product-shaped choke point.
 
 ## 3. Identity, Delegation, and Authorization
 

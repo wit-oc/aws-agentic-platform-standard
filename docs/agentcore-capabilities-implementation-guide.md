@@ -1,140 +1,190 @@
 # AgentCore Capabilities and Implementation Guide
 
 ## Purpose
-Translate the earlier AWS architecture decisions into a practical **AgentCore-oriented implementation stack**, while preserving:
-- Terraform-first delivery,
-- Lambda-first to ROSA scale path,
-- strong agent-to-agent auth,
-- explicit audit + observability split,
-- layered prompt/security inheritance.
 
----
+Translate the current AgentCore prototype specification into a practical implementation stack while preserving:
+- code-first orchestration,
+- Terraform-first delivery for AWS assets,
+- strong identity and delegated authorization,
+- explicit audit + observability split,
+- layered prompt/security inheritance,
+- cross-platform governance for AWS, iPaaS/proprietary, and SaaS-native agent surfaces.
+
+Primary authority:
+- `docs/agentcore-prototype-spec-v1.md`
 
 ## 1) Working Definition: What AgentCore Should Be
 
-Treat AgentCore as the platform layer that sits above raw AWS primitives and provides:
+Treat AgentCore as a managed runtime and lifecycle surface that participates in the enterprise governance spine.
+
+AgentCore should ideally provide or integrate with:
 
 1. **Agent lifecycle management**
    - register/version/deploy/rollback agent definitions
-2. **Execution control**
-   - runtime policy checks and approval hooks
-3. **Inter-agent governance**
-   - identity propagation, signed handoffs, trust boundaries
-4. **Memory governance**
-   - scoped memory connectors with retention/lineage controls
-5. **Evaluation + audit integration**
+2. **Managed runtime hosting**
+   - production agent execution with stable operational controls
+3. **Policy and approval hooks**
+   - runtime checkpoints before side effects
+4. **Identity propagation**
+   - user, agent, tenant/business context, environment, delegation mode
+5. **Tool contract enforcement**
+   - registered actions, risk classes, execution authority checks
+6. **Memory governance**
+   - scoped memory connectors with retention and lineage metadata
+7. **Evaluation + audit integration**
    - release gates, runtime scoring, immutable evidence trails
 
-If a given AgentCore product surface does not fully provide this, implement missing pieces in your control plane.
+AgentCore Runtime should not force provider-native orchestration lock-in. Prompts, workflow logic, tool-selection behavior, and state transitions should remain portable in application/framework code unless a provider-native feature is explicitly justified.
 
----
+## 2) Capability Map: Governance Contract -> Implementation Options
 
-## 2) Capability Map: AgentCore -> AWS Building Blocks
+| Governance capability | AWS / AgentCore option | iPaaS / proprietary option | SaaS-native option |
+|---|---|---|---|
+| Agent inventory | Control plane registry + signed manifests | Registry entry for workflow/agent/app | Registry entry for native agent/app feature |
+| Runtime execution | AgentCore Runtime, Lambda, ECS/EKS/ROSA | Workato/Pega-like execution | Vendor-hosted execution |
+| Orchestration | Application/framework code; Step Functions for durable checkpoints | Platform workflow engine where controls fit | Vendor-native workflow controls |
+| Tool/action governance | Tool Gateway, PEP/PDP, IAM, Verified Permissions | Connector policy hooks, scoped credentials, approval integrations | Admin settings, OAuth scopes, vendor audit/export |
+| Identity/delegation | Entra/AWS federation + propagated request context | Delegated auth where platform supports it; otherwise marked service-authorized | Vendor-supported delegated auth or documented service-account gap |
+| Approval | Approval broker / Step Functions / workflow pause | Platform approval task or external broker callback | Native approval feature or compensating manual control |
+| Audit | Immutable evidence stream + OTel/CloudWatch correlation | Audit export + evidence correlation | Native audit export/admin logs + evidence correlation |
+| Replay/idempotency | Gateway idempotency keys + nonce/TTL | Platform-supported idempotency or wrapper controls | Vendor capability or documented gap |
 
-| AgentCore Capability | AWS-Native Backing Pattern |
-|---|---|
-| Agent registry + versions | DynamoDB/Aurora metadata + ECR artifacts + signed manifests in S3 |
-| Runtime execution API | API Gateway + Lambda/ECS/ROSA runtime service |
-| Deterministic orchestration | Step Functions state machines |
-| Async agent coordination | EventBridge + SQS/SNS envelopes |
-| Tool invocation governance | Tool Gateway (private API), IAM/IRSA, Verified Permissions |
-| Prompt/policy layering | Versioned config bundles in S3/AppConfig + manifest resolver |
-| Session + run state | DynamoDB |
-| Semantic memory | OpenSearch Serverless or Aurora pgvector |
-| Artifacts/evidence | S3 (+ Object Lock if required) |
-| Observability | OTel -> CloudWatch/X-Ray/OpenSearch |
-| Audit trail | Append-only decision/action logs in immutable storage |
+## 3) Runtime and Orchestration Pattern
 
----
+### Required posture
 
-## 3) Implementing Earlier Design Decisions in AgentCore
-
-## 3.1 Agent-to-Agent Authentication and Trust
-
-### Required pattern
-- Runtime identity per agent service (IAM role / IRSA role).
-- Inter-agent API calls are SigV4 signed.
-- Event handoffs use signed envelope with:
-  - `agent_id`, `tenant_id`, `trace_id`, `policy_context`, `nonce`, `exp`.
-
-### Verification steps at receiver
-1. Verify caller identity + role mapping.
-2. Verify tenant and environment boundaries.
-3. Verify action is allowed by policy.
-4. Verify nonce/TTL to prevent replay.
+- Keep orchestration logic in application/framework code by default.
+- Use AgentCore Runtime as a preferred managed hosting plane where it supports the required controls.
+- Use Step Functions for durable checkpoints, approvals, long-running business transitions, and external workflow coordination—not as the default agent brain.
+- Use EventBridge/SQS for decoupled async work and event choreography.
 
 ### Why this matters
-This is the minimum to safely run multi-agent systems without implicit trust between services.
 
----
+This prevents expensive lock-in and keeps the enterprise policy/identity/audit contract stable if runtime providers, agent frameworks, or integration platforms change.
 
-## 3.2 Event Bus + Orchestration Model
+## 4) Agent-to-Agent Authentication and Trust
 
-### Recommended hybrid
-- **Step Functions** for stateful, deterministic control flow.
-- **EventBridge/SQS** for decoupled inter-agent communication and background tasks.
+### Required pattern
 
-### Practical split
-- Keep critical business transitions in Step Functions.
-- Use EventBridge for notifications, fanout, and independent worker execution.
-- Persist all handoff envelopes and outcomes for replay/debug.
+- Runtime identity per agent service or platform integration.
+- Signed inter-agent or inter-platform handoff envelopes where supported.
+- Handoff context includes:
+  - `agent_id`
+  - `tenant_id` or business context
+  - `environment`
+  - `trace_id`
+  - `run_id`
+  - `policy_context`
+  - `delegation_mode`
+  - `nonce`/`exp` where supported
 
----
+### Verification steps at receiver
 
-## 3.3 Runtime Path: Lambda -> ROSA
+1. Verify caller identity + role/platform mapping.
+2. Verify tenant/business and environment boundaries.
+3. Verify action is registered and allowed by policy.
+4. Verify nonce/TTL/idempotency where available.
+5. Preserve trace/audit correlation IDs.
 
-### Stage A: Lambda baseline
-- rapid iteration, lower ops overhead, low-to-medium traffic.
+No agent platform should implicitly trust another agent just because both are “enterprise tools.”
 
-### Stage B: Mixed runtime
-- Lambda for burst/simple tasks,
-- container workers for long-running or memory-heavy steps.
+## 5) Tool and External Action Governance
 
-### Stage C: ROSA scale
-- ROSA-hosted agent pools for sustained/high-throughput workloads,
-- queue-driven autoscaling,
-- stricter pod/network policy and workload identity.
+Tool governance must distinguish:
+- **capability availability**: whether an agent/platform has a registered action surface
+- **execution authority**: whether this invocation is allowed for this user/context/resource
 
-**Key requirement:** agent contract and policy model must remain identical across all runtime tiers.
+Every governed action should have a contract containing:
+- action name and description
+- target system and resource type
+- read/write/destructive classification
+- risk class
+- required identity mode
+- required request context fields
+- approval requirements
+- audit event requirements
+- rollback/compensation notes
 
----
+## 6) Workato / iPaaS Position
 
-## 3.4 Terraform-First Control
+Workato can be valuable, but it should not be declared the universal gateway because the organization wants one gateway.
 
-Model AgentCore stacks as Terraform modules:
+Use Workato as a **Tier 1 mediated integration plane** when it can provide:
+- connector coverage for the target system,
+- enforceable policy or approval hooks,
+- scoped credential management,
+- delegated user authorization where required or clear service-account labeling where not,
+- idempotency/replay protection or wrapper controls,
+- audit export with trace correlation,
+- operational ownership and support.
+
+Do not use Workato as the single default gateway when:
+- the agent runs inside AgentCore/application runtime and needs low-latency/native tool control,
+- the action occurs inside a SaaS-native vendor agent surface that Workato cannot truly front,
+- Workato would collapse delegated user authorization into a broad service account,
+- approval/audit context would be weaker than a direct platform/Gateway path,
+- connector semantics hide the target resource authorization decision,
+- routing everything through Workato creates an operational choke point without stronger controls.
+
+Architecture anchor: **one governance spine, multiple enforcement points**.
+
+## 7) Integration Control Tiers
+
+| Tier | Pattern | Examples | Expected control posture |
+|---|---|---|---|
+| Tier 0 | Platform-owned agent/runtime/tool gateway | AgentCore-hosted domain agent, AWS-hosted app agent | Full request context, policy evaluation, approval, audit, replay protection |
+| Tier 1 | Mediated iPaaS/proprietary platform | Workato, Pega-like workflow engine | Registered contracts, policy hooks where available, audit correlation, scoped credentials |
+| Tier 2 | SaaS-native/constrained vendor surface | Workday/Zoom native agent features | Inventory, native admin controls, least-privilege scopes, audit ingestion, documented gaps |
+| Tier 3 | Legacy/manual exception | Manual runbooks, unwrapped scripts | Explicit risk acceptance, owner review, migration target |
+
+## 8) Terraform-First Control
+
+Model AWS-hosted pieces as Terraform modules where practical:
 - `agentcore-control-plane`
+- `agent-runtime-agentcore`
 - `agent-runtime-lambda`
-- `agent-runtime-rosa`
+- `agent-runtime-container`
 - `agent-event-fabric`
 - `agent-tool-gateway`
 - `agent-memory`
 - `agent-observability-audit`
+- `integration-registry`
 
 CI checks:
 - `terraform validate` / `fmt` / lint,
-- security checks (`tfsec`/`checkov`),
+- security checks,
 - plan review + drift detection,
 - environment promotion with approvals.
 
----
+External platform configuration may not be fully Terraform-manageable. Where it is not, the platform still needs exportable evidence of configuration, owners, scopes, and audit settings.
 
-## 3.5 Auditing vs Observability
+## 9) Auditing vs Observability
 
-### Observability (ops)
-- latency, error rate, throughput, saturation, token/cost telemetry.
+### Observability
 
-### Auditing (compliance/forensics)
-- immutable chain of:
-  - model/tool/policy decisions,
-  - approval checkpoints,
-  - side-effect actions,
-  - actor identity and timestamps.
+Operational signals:
+- latency,
+- error rate,
+- throughput,
+- saturation,
+- token/cost telemetry,
+- runtime quality.
 
-CloudWatch is necessary for runtime operations, but not sufficient as the sole audit system for enterprise-grade governance.
+### Auditing
 
----
+Immutable evidence chain:
+- request context,
+- model/tool/policy decisions,
+- approval checkpoints,
+- side-effect actions,
+- actor identity,
+- delegation mode,
+- timestamps,
+- target resource outcome.
 
-## 3.6 Layered Prompt/Security Inheritance (Base Image Model)
+CloudWatch is necessary for runtime operations, but not sufficient as the sole audit system for enterprise governance.
+
+## 10) Layered Prompt/Security Inheritance
 
 Use three composable layers:
 
@@ -146,79 +196,92 @@ Use three composable layers:
    - intent/objective and use-case behavior.
 
 ### Merge policy
-- base layer is immutable from downstream teams.
-- domain + intent can extend but not weaken base controls.
-- final merged system prompt/config is signed into deployment manifest.
+
+- Base layer is immutable from downstream teams.
+- Domain + intent can extend but not weaken base controls.
+- Final merged system prompt/config is signed into deployment manifest.
 
 ### Update inheritance
-- when base policy updates, dependent agent packs receive a compatibility/eval check and staged rollout.
 
----
+When base policy updates, dependent agent packs receive a compatibility/eval check and staged rollout.
 
-## 4) Suggested AgentCore API Surface (Minimal)
+## 11) Suggested AgentCore API Surface
 
-- `POST /agent-definitions` (register/update versioned definition)
-- `POST /agent-deployments` (deploy definition to env/tenant)
-- `POST /agent-runs` (start run with policy context)
-- `POST /agent-runs/{id}/approve` (approval callback)
-- `POST /agent-handoffs` (signed inter-agent transfer)
-- `GET /agent-runs/{id}/trace` (execution + policy + audit views)
+Minimal platform-owned API surface:
 
-This gives a clean contract that product teams can target without needing to know underlying AWS internals.
+- `POST /agent-definitions` — register/update versioned definition
+- `POST /agent-deployments` — deploy definition to env/tenant
+- `POST /agent-runs` — start run with request/policy context
+- `POST /agent-runs/{id}/approve` — approval callback
+- `POST /agent-handoffs` — signed inter-agent transfer
+- `GET /agent-runs/{id}/trace` — execution + policy + audit view
+- `POST /tool-actions/register` — register governed action contract
+- `GET /external-agent-surfaces` — inventory external/iPaaS/SaaS-native surfaces
 
----
-
-## 5) Agent Definition Schema (Template)
+## 12) Agent Definition Schema (Template)
 
 ```yaml
 agentDefinition:
   id: customer-support-triage
   version: 1.3.0
   runtime:
-    mode: lambda|rosa
+    mode: agentcore|lambda|container|external-platform|saas-native
+    hostPlatform: bedrock-agentcore
     timeoutSeconds: 120
   modelPolicy:
+    provider: bedrock
     profile: balanced-cost
     fallback: true
   promptLayers:
     basePolicyPack: base-security-v7
     domainPack: support-domain-v3
     intentPack: triage-intent-v12
+  identity:
+    supportsDelegatedUser: true
+    serviceAccountFallbackAllowed: false
   tools:
     - id: kb.search
       risk: read
+      identityMode: delegated-user
     - id: ticket.create
       risk: write-low
+      identityMode: delegated-user
     - id: account.update
       risk: write-high
+      identityMode: delegated-user
       requiresApproval: true
+  externalSurfaces:
+    - platform: workato
+      controlTier: tier-1
+      auditExport: enabled
+    - platform: workday
+      controlTier: tier-2
+      auditExport: native-admin-log
   memory:
     sessionStore: dynamodb
     vectorStore: opensearch
     retentionDays: 30
   observability:
     emitOtel: true
-    auditLevel: full
+    auditLevel: high
 ```
 
----
+## 13) Rollout Sequence
 
-## 6) Rollout Sequence for an AgentCore Program
+1. Standardize agent/action inventory schema.
+2. Inventory AWS, iPaaS/proprietary, and SaaS-native agent surfaces.
+3. Assign control tiers and document gaps.
+4. Standardize request context and tool/action contracts.
+5. Implement AgentCore Runtime pilot for one bounded-purpose domain agent.
+6. Add policy, approval, and immutable audit pipeline.
+7. Add Workato/iPaaS integration where technically justified.
+8. Add SaaS-native compensating controls and audit ingestion.
+9. Enforce release gates for all agent updates and action-surface changes.
 
-1. Standardize agent definition + prompt layer schema.
-2. Implement control plane APIs and signing/manifest resolver.
-3. Deploy Lambda baseline runtime + event/orchestration fabric.
-4. Add tool gateway with risk policies and approvals.
-5. Add immutable audit evidence pipeline.
-6. Introduce ROSA runtime class for high-throughput workloads.
-7. Enforce release gates (eval + policy + security) for all agent updates.
+## 14) Decision Guidance
 
----
-
-## 7) Decision Guidance for Your Team
-
-- If AgentCore gives strong lifecycle/governance primitives, adopt it as the control abstraction.
-- If AgentCore is mostly convenience wrappers, keep your control plane authoritative and use AgentCore selectively.
-- Keep Strands/agent templates as a packaging layer, not your only governance boundary.
-
-The strategic goal is to keep enterprise controls stable even if agent frameworks evolve.
+- If AgentCore gives strong runtime/lifecycle primitives, use it as the preferred managed runtime.
+- If AgentCore or any vendor surface weakens governance, keep the control in the platform governance spine.
+- If Workato provides the strongest enforceable control for a workflow, use it as a Tier 1 enforcement point.
+- If Workato is only organizationally convenient but weakens identity, approval, audit, or target authorization, do not make it the gateway for that workflow.
+- Keep enterprise controls stable even when frameworks, vendors, and runtime surfaces evolve.

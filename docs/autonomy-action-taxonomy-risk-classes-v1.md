@@ -23,9 +23,11 @@ This is not a final enterprise policy language; it is an implementation-ready co
 - Classifying proposed actions before execution.
 - Assigning a risk class used by policy evaluator and approval routing.
 - Defining lane mapping and approval expectations by risk class.
+- Applying the same classification model across AWS-hosted agents, AgentCore Runtime agents, Workato/iPaaS/proprietary automation, SaaS-native agents, and legacy/manual exception paths.
 
 ### Core terms
 - **Action:** a concrete side-effect intent (or privileged read) the system proposes.
+- **Action surface:** the runtime or platform where the action is exposed, such as AgentCore Runtime, an AWS-hosted tool gateway, Workato, a proprietary iPaaS/Pega-like platform, or a SaaS-native agent surface.
 - **Risk class:** normalized severity bucket (`R0`…`R4`) assigned pre-execution.
 - **Lane:** execution path (`auto`, `queued`, `manual`) chosen from risk class + policy.
 - **Approval expectation:** who must approve, within what SLA, with what evidence.
@@ -112,17 +114,21 @@ Default risk tendency: `R3`→`R4`.
 
 ## 5.1 Required factors
 1. **Surface:** internal approved / external trusted / external public.
-2. **Auth level:** none / standard token / high-privilege credential.
-3. **Data sensitivity:** public / internal / sensitive.
-4. **Blast radius:** single object / small batch / broad or unknown.
-5. **Reversibility:** easy rollback / partial rollback / irreversible.
-6. **Governance impact:** no / indirect / direct boundary change.
+2. **Action surface control tier:** Tier 0 platform-owned / Tier 1 mediated iPaaS-proprietary / Tier 2 SaaS-native constrained / Tier 3 legacy exception.
+3. **Auth level:** none / delegated user / standard service token / high-privilege credential.
+4. **Data sensitivity:** public / internal / sensitive.
+5. **Blast radius:** single object / small batch / broad or unknown.
+6. **Reversibility:** easy rollback / partial rollback / irreversible.
+7. **Governance impact:** no / indirect / direct boundary change.
+8. **Auditability:** full immutable evidence / native audit export / partial or unknown.
 
 ## 5.2 Hard-elevation rules (must apply)
 - If governance impact is direct => `R4`.
 - If operation is destructive and irreversible with broad/unknown blast radius => at least `R3`.
 - If credential scope expansion is requested => `R4`.
 - If required context is missing (unknown target/audience/scope) => elevate one class or route `manual`.
+- If a protected-data action cannot preserve delegated user authorization where required => route `manual` or deny until exception is approved.
+- If the action surface is Tier 2 or Tier 3 and native audit coverage is partial/unknown => elevate one class unless compensating controls are documented.
 
 ## 5.3 Defaulting rules
 - Unknowns default conservative: do not classify below `R2`.
@@ -174,6 +180,18 @@ Default risk tendency: `R3`→`R4`.
    - Class: AC4
    - Risk: `R4`
    - Lane: `manual` owner gate
+
+6. **Trigger Workato workflow that updates one governed SaaS record with scoped credentials and approval hook**
+   - Class: AC3
+   - Risk: `R2` or `R3` depending on data sensitivity and reversibility
+   - Lane: `queued`/`manual`
+   - Note: Workato is the Tier 1 enforcement point, not proof that the target resource authorized the user.
+
+7. **SaaS-native agent changes Workday/Zoom configuration where gateway fronting is not available**
+   - Class: AC3/AC4 depending on setting
+   - Risk: `R3` or `R4`
+   - Lane: `manual`
+   - Note: requires owner, native audit evidence, least-privilege scope review, and documented compensating controls.
 
 ---
 
