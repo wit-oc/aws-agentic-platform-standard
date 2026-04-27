@@ -157,13 +157,19 @@ A Human-in-the-Loop (HITL) control framework **MUST** exist for actions crossing
 Protected data, sensitive tools, and exception-bearing resources **MUST** support explicit tagging or equivalent classification metadata. Authorization and policy enforcement **MUST** account for such tags. Where feasible, exception awareness **SHOULD** be visible through the service or agent registry.
 
 ### 3.H. Environment Boundary Controls
-Identities **MAY** hold entitlements across multiple SDLC environments according to approved policy. However, service-to-service and agent-to-service interactions **MUST** enforce environment boundaries by default. Cross-environment access, including development-to-production interaction, **MUST NOT** be assumed or implicitly trusted.
+Identities **MAY** hold entitlements across multiple SDLC environments according to approved policy. However, service-to-service and agent-to-service interactions **MUST** enforce environment and account boundaries by default.
+
+Cross-environment and cross-account access, including development-to-production interaction, **MUST** be deny-by-default and allow-by-explicit-exception. Exceptions **MUST** be documented, owner-approved, scope-bounded, time-bounded where practical, and auditable. Cross-account access **MUST NOT** be assumed from broad platform membership, agent registration, or shared operational ownership.
 
 ### 3.I. Tool Availability vs. Tool Execution Authority
 Tool availability **MUST** be determined by agent registration, environment, and platform policy. Tool execution authority **MUST** be evaluated per request against the applicable caller context, delegated identity context where present, target resource policy, and HITL or other policy gates. User claims **MUST NOT** directly expand the registered capability surface of an agent, but **MAY** further constrain or authorize execution within that surface.
 
 ### 3.J. Delegated User Entitlement and Agent Credentials
-User-originated requests for protected data or business functions **MUST** execute under the user’s delegated entitlement when such delegation is supported. Agent or service credentials **MUST NOT** be used to bypass user authorization boundaries for actions expected to be performed under user entitlement. Agents **MUST NOT** be granted standing privileges for user-governed actions when delegated user authorization is available. Autonomous agent actions on behalf of a user, without user context, **MUST** be explicitly bounded, tagged, and policy-governed. Autonomous agent actions not operating on behalf of a user **MAY** execute under agent or service identity, but **MUST** remain within explicitly defined service scope, environment boundaries, and policy constraints.
+User-originated requests for protected data or business functions **MUST** execute under the user’s delegated entitlement when such delegation is supported. Agent or service credentials **MUST NOT** be used to bypass user authorization boundaries for actions expected to be performed under user entitlement. Agents **MUST NOT** be granted standing privileges for user-governed actions when delegated user authorization is available.
+
+Autonomous agent actions on behalf of a user, without user context, **MUST** be explicitly bounded, tagged, and policy-governed. Autonomous agent actions not operating on behalf of a user **MAY** execute under agent or service identity, but **MUST** remain within explicitly defined service scope, environment boundaries, and policy constraints.
+
+These boundaries **MUST** be enforced by hard controls such as IAM, workload identity, OAuth scopes, gateway policy, resource policy, network controls, approval gates, or equivalent platform mechanisms. Prompt steering, system instructions, or agent self-discipline **MUST NOT** be treated as sufficient enforcement for delegated entitlement, standing privilege, or service-scope boundaries.
 
 ## 4. Authorization and Execution Flow
 
