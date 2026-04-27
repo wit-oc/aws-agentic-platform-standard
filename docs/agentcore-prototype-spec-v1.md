@@ -12,12 +12,16 @@
 ### 1.A. Portability Requirement
 Portability **MUST** be treated as a hard requirement.
 
-The preferred pattern **MUST** keep orchestration logic in application code rather than making Bedrock Agents the primary architectural abstraction. AgentCore Runtime **MAY** be the default hosting plane, but prompts, orchestration graphs, tool-selection logic, and workflow state **SHOULD** remain portable enough to move to another approved runtime if required.
+The preferred pattern **MUST** keep durable orchestration state, approval checkpoints, retry policy, and cross-system workflow control externalized from any single agent runtime where practical. AgentCore Runtime **MAY** be the default hosting plane for agent execution, but prompts, agent contracts, orchestration state, tool-selection boundaries, and workflow definitions **SHOULD** remain portable enough to move to another approved runtime or orchestration surface if required.
+
+Agent application code **MAY** own short-lived task-local reasoning and bounded intra-agent flow. It **SHOULD NOT** become the only place where enterprise workflow state, HITL state, retry behavior, or cross-agent/cross-system process state can be observed or controlled.
 
 ### 1.B. Primary Orchestration Model
-The platform **SHOULD** use framework-native orchestration in code as the default execution model.
+The platform **SHOULD** use an externalized, durable orchestration/control-plane model for business workflow state and long-running execution.
 
-AgentCore-native surfaces **MAY** be used where they create clear operational value, but the core agent contract **MUST NOT** depend on a provider-specific orchestration model when a portable code-first pattern is available.
+Framework-native or application-code orchestration **MAY** be used for agent-local behavior, prompt flow, and bounded task execution. Durable business process orchestration, HITL pause/resume, approval routing, retries, escalation, fanout, and cross-system coordination **SHOULD** be represented in explicit orchestration or control-plane constructs that operators can inspect and govern.
+
+AgentCore-native surfaces **MAY** be used where they create clear operational value, but the core agent contract **MUST NOT** depend on a provider-specific orchestration model when a portable externalized pattern is available.
 
 ### 1.C. Agent Topology
 The initial implementation **MUST** prefer a single bounded-purpose agent per domain capability.
@@ -59,16 +63,18 @@ The inventory **MUST** include, where applicable:
 - identity mode
 - delegated-user support status
 - approval and audit capabilities
-- gateway or policy-enforcement integration tier
+- gateway or policy-enforcement control mode
 
 This includes agents and agent-like automations running in AWS-hosted application code, Bedrock AgentCore Runtime, Workato or other iPaaS platforms, proprietary automation platforms such as Pega, and SaaS-native agent surfaces such as Workday or Zoom.
 
 ### 2.B. Logical Governance Spine, Not Single Product Gateway
-The platform **MUST** preserve a single logical governance spine for policy, identity context, audit correlation, and approval routing.
+The platform **MUST** preserve a single logical governance spine for policy, identity context, audit correlation, approval routing, and platform reporting.
 
 That governance spine **MUST NOT** be equated with a single vendor gateway product. Workato, a proprietary iPaaS, an AWS-hosted tool gateway, or a SaaS-native admin/control surface **MAY** each serve as an enforcement point for the resources they can actually mediate, but no single integration platform **SHOULD** be assumed to front every agent, tool, or SaaS action.
 
-Workato or a similar iPaaS **MAY** be used as a managed integration plane where it provides strong connector coverage, operational ownership, and policy/audit hooks. It **MUST NOT** become the default enterprise-wide agent gateway unless it can preserve delegated identity, least privilege, replay/idempotency controls, approval hooks, and immutable audit correlation across the relevant action surface.
+Workato currently publishes AI gateway and MCP capabilities that are relevant to this pattern, including AI gateway collections, MCP servers, connector-backed skills/tools, configurable authorization between Workato and AI agents, and audit/governance positioning. Those capabilities make Workato a credible candidate enforcement point for mediated integration workflows. They do **not**, by themselves, prove that Workato is the technically correct universal gateway for AgentCore-hosted agents, proprietary agent platforms, or SaaS-native agent surfaces that execute inside vendor control planes.
+
+The decision to use Workato as an enforcement point **MUST** be made per workflow/action surface based on technical control fit: delegated identity support, connector semantics, approval hooks, audit export, idempotency/replay controls, operational ownership, latency, failure behavior, and target-resource authorization preservation. Organizational preference for one primary gateway **MUST NOT** override those technical constraints.
 
 ### 2.C. Gateway Fronting Expectations
 For platform-owned agents and integration platforms where requests can be mediated, nontrivial external actions **SHOULD** route through Gateway-managed tool contracts or an equivalent policy-enforced execution boundary.
@@ -80,6 +86,8 @@ For SaaS-native agents or constrained vendor surfaces where full gateway frontin
 - classify exposed actions by risk
 - document unsupported delegation or approval capabilities
 - define exception handling, disablement, and review cadence
+
+The Product Owner or accountable platform owner for each external agent platform **MUST** own evidence that their platform aligns to these standards. That ownership **SHOULD** include a recurring review/reporting process covering inventory completeness, scope and permission posture, audit availability, exceptions, open gaps, and remediation status.
 
 Limited fronting **MUST NOT** be treated as invisibility. SaaS-native agents remain governed assets even when the platform can only observe, configure, or constrain them indirectly.
 
@@ -95,22 +103,26 @@ Every governed tool or external action surface **SHOULD** have a registered cont
 - audit event requirements
 - rollback or compensation notes where applicable
 
-Tool registration **MUST** distinguish between capability availability and execution authority. A tool being registered for an agent does not mean every user or invocation is authorized to execute it.
+The default operating assumption **SHOULD** be that if a tool is registered to an agent, users authorized to use that agent can invoke that tool through the agent. The platform **SHOULD NOT** create a default spiderweb of independent per-user entitlements at the gateway, agent, tool, and resource layers.
 
-### 2.E. Integration Control Tiers
-The prototype **SHOULD** classify each external platform or tool surface into one of these control tiers:
+Data contracts and target-resource authorization **MUST** still be preserved. The tool should pass through the required caller, delegation, and request context so the system behind the tool can enforce access to the underlying data or action. If tool use must be limited, the preferred control is to gate the tool's registration/availability to the agent or agent profile, rather than layering ad hoc per-user tool entitlements by default.
 
-| Tier | Pattern | Expected control posture |
+Per-user or per-group tool constraints **MAY** be introduced for exceptional high-risk cases, but they **SHOULD** be explicit exceptions with owner, rationale, auditability, and troubleshooting guidance.
+
+### 2.E. Integration Control Modes
+The prototype **SHOULD** classify each external platform or tool surface into one of these control modes:
+
+| Mode | Pattern | Expected control posture |
 |---|---|---|
-| Tier 0 | Platform-owned agent/runtime/tool gateway | Full request context, policy evaluation, approval, audit, replay protection |
-| Tier 1 | Mediated iPaaS or proprietary automation platform | Registered contracts, policy hooks where available, audit correlation, scoped credentials |
-| Tier 2 | SaaS-native agent or constrained vendor surface | Inventory, native admin controls, least-privilege app scopes, audit ingestion, documented gaps |
-| Tier 3 | Legacy/manual exception | Explicit risk acceptance, compensating controls, owner review, migration target |
+| Full Feature | Platform-owned agent/runtime/tool gateway | Full request context, policy evaluation, approval, audit, replay protection |
+| Partial Feature | Mediated iPaaS or proprietary automation platform | Registered contracts, policy hooks where available, audit correlation, scoped credentials |
+| Best Effort | SaaS-native agent or constrained vendor surface | Inventory, native admin controls, least-privilege app scopes, audit ingestion, documented gaps |
+| Exception | Legacy/manual exception | Explicit risk acceptance, compensating controls, owner review, migration target |
 
-Promotion from prototype to production **MUST** identify the tier for every in-scope action surface and document any Tier 2 or Tier 3 gaps.
+Promotion from prototype to production **MUST** identify the control mode for every in-scope action surface and document any Best Effort or Exception gaps.
 
 ### 2.F. Delegated Authorization Preservation Across Platforms
-Where a request originates from a human user and touches protected data or governed business functions, the integration path **MUST** preserve delegated user authorization when the downstream system supports it.
+Where a request originates from a human user and touches data or governed business functions, the integration path **MUST** preserve delegated user authorization when the downstream system supports it.
 
 If an external platform only supports service-account execution, the use case **MUST** be explicitly marked as service-authorized, policy-bounded, and audit-enhanced. Service-account execution **MUST NOT** be used to imply user entitlement where the downstream system did not actually enforce it.
 
@@ -118,6 +130,8 @@ If an external platform only supports service-account execution, the use case **
 The control model **SHOULD** avoid making any one integration vendor the irreversible center of the architecture.
 
 The preferred pattern is a portable policy, identity, request-context, and audit contract that can be implemented by multiple enforcement points: an AWS-hosted gateway, Workato or another iPaaS, proprietary platforms, and SaaS-native controls. This preserves governance consistency without forcing every workflow through one product-shaped choke point.
+
+The governance contract **SHOULD** be declarative where practical. Platform-specific adapters or harnesses **SHOULD** translate the declarative policy intent into native controls, configuration, evidence collection, and reports for each enforcement surface. This allows new platforms to come online by mapping their native capabilities to the shared governance pattern rather than rewriting the enterprise policy model for each platform.
 
 ## 3. Identity, Delegation, and Authorization
 
