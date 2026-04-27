@@ -173,7 +173,7 @@ These boundaries **MUST** be enforced by hard controls such as IAM, workload ide
 
 ## 4. Authorization and Execution Flow
 
-### 4.1. Canonical Claim and Request Context Set
+### 4.A. Canonical Claim and Request Context Set
 Each agent request that reaches an execution boundary **MUST** carry a canonical request context sufficient to support authorization, auditing, and policy evaluation.
 
 The baseline context **MUST** include, where applicable:
@@ -187,34 +187,36 @@ The baseline context **MUST** include, where applicable:
 - delegation mode
 - group, role, or entitlement attributes when required for policy evaluation
 
-Where supported, the context **SHOULD** also include additional security-relevant attributes such as authentication strength, token issuer, token age or expiry context, source application, approval state, data-classification hints, and purpose-of-use or business-justification metadata for sensitive workflows.
+Additional attributes **SHOULD** be attached only when required by policy, the target resource, or the registered tool/capability contract. Examples include authentication strength, token issuer, token age or expiry context, source application, approval state, and data-classification hints.
+
+Purpose-of-use and business-justification metadata **SHOULD** generally be defined at the workflow, tool, or capability level and referenced by execution/audit records rather than repeated chattily on every invocation. Per-execution purpose or justification **MAY** be required for sensitive, exceptional, or approval-gated actions.
 
 Claims and request attributes **MUST NOT** be propagated beyond what is required for enforcement, auditing, and downstream authorization.
 
-### 4.2. Delegation Model
+### 4.B. Delegation Model
 The platform **MUST** distinguish between actions executed under delegated user identity and actions executed under agent or service identity.
 
 As the default operating rule:
-- access to governed or protected data **MUST** use delegated user entitlement when a user is the originating requester and the downstream system supports delegated authorization
+- access to data or governed business functions **MUST** use delegated user entitlement when a user is the originating requester and the downstream system supports delegated authorization
 - system, API, infrastructure, and platform-control operations **SHOULD** execute under agent or service identity unless a stronger user-bound control is explicitly required
 
 Where a workflow mixes both data access and platform actions, the implementation **MUST** preserve the identity mode used for each step and **MUST NOT** silently widen a data-access step from delegated user authorization to standing service authorization.
 
-### 4.3. Policy Decision and Enforcement Layers
+### 4.C. Policy Decision and Enforcement Layers
 Access control **SHOULD** be enforced primarily at the agent runtime and/or Gateway boundary, where request context, delegation mode, tool policy, and HITL state can be evaluated together.
 
 Tools **MUST** receive authorization context from upstream rather than inventing or mutating it locally.
 
-Protected resources **MUST** continue to enforce their own native access controls, connection policy, and resource ACLs independent of the agent or tool path. Agent or Gateway authorization **MUST NOT** be treated as a substitute for downstream resource authorization.
+Target resources **MUST** continue to enforce their own native access controls, connection policy, and resource ACLs independent of the agent or tool path. Agent or Gateway authorization **MUST NOT** be treated as a substitute for downstream resource authorization.
 
 The effective decision model **MUST** behave as layered enforcement:
 1. agent or Gateway policy determines whether the requested action may be attempted
 2. tool boundary determines whether invocation conditions and risk gates are satisfied
 3. target resource determines whether the presented identity is authorized for the requested operation
 
-A request **MUST** be denied when any applicable layer denies it.
+A request **MUST** be denied when any applicable layer denies it. These enforcement outcomes **MUST** be implemented as hard controls in the relevant enforcement layer; prompt steering, system instructions, or agent self-discipline **MUST NOT** be treated as sufficient enforcement.
 
-### 4.4. Audit Contract and Audit Levels
+### 4.D. Audit Contract and Audit Levels
 The platform **MUST** define a standard audit contract in agent templates and shared execution surfaces.
 
 Every tool invocation or side-effecting action **MUST** emit audit data sufficient to reconstruct:
@@ -228,15 +230,15 @@ Every tool invocation or side-effecting action **MUST** emit audit data sufficie
 - HITL state and outcome where applicable
 - execution timestamp and trace correlation identifiers
 
-The platform **SHOULD** define default audit levels at the template level.
+The platform **SHOULD** define default audit levels at the template, tool, or capability level.
 
 At minimum:
-- **medium audit** **MUST** be the default baseline for standard enterprise actions
-- **high audit** **MUST** be required for PHI, PII, or similarly sensitive workflows
+- **medium audit** **MUST** be the default baseline for standard enterprise actions. It should capture the actor, agent, delegation mode, action, target system/resource reference, environment, policy decision, HITL outcome where applicable, timestamp, and trace identifiers. It **SHOULD NOT** capture full prompts, payloads, or data values by default unless required for troubleshooting or compliance.
+- **high audit** **MUST** be required for PHI, PII, regulated data, high-risk writes, exception paths, or similarly sensitive workflows. It should add policy version/reason codes, approval evidence, reviewer identity where applicable, data-classification context, purpose-of-use or business-justification reference, stronger retention/immutability requirements, and request/response metadata or hashes sufficient to support review.
 
-Higher audit levels **MAY** require additional event detail, stronger retention controls, stricter immutable storage requirements, and enhanced approval evidence.
+Full payload capture **MUST** remain data-minimized and policy-governed. High audit does not automatically mean storing sensitive content verbatim when a reference, hash, redacted payload, or downstream system audit record is sufficient.
 
 ## 5. Open Notes
-- This document intentionally separates **agent capability registration** from **per-request execution authority**.
-- This document intentionally separates **user-proxy autonomy** from **platform-native automation**.
-- Prototype bridges using non-sensitive data are acceptable for architecture validation, but they do not satisfy the end-state requirement for federated authorization.
+- Tool availability should be governed primarily through agent/profile registration, with target resources preserving downstream data/action authorization. Avoid defaulting to a maze of independent per-user tool entitlements unless a high-risk exception requires it.
+- User-proxy autonomy and platform-native automation remain distinct execution modes and should be labeled explicitly in implementation artifacts.
+- Prototype bridges using non-sensitive data are acceptable for architecture validation, but they do not satisfy the end-state requirement for federated permissions where delegated authorization is required.
